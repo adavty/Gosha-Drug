@@ -1,0 +1,57 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gosha-jmlc"
+version = "1.2.0"
+description = "Safe human-confirmed AI assistant for shared study deadlines"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+    "coverage[toml]>=7.6,<8",
+    "pip-audit>=2.7,<3",
+    "pytest>=9.0.3,<10",
+    "ruff>=0.9,<1",
+    "pillow>=10.0",
+    "pypdf>=6.0",
+]
+postgres = ["psycopg[binary]>=3.2,<4"]
+
+[project.scripts]
+gosha = "gosha.cli:main"
+gosha-server = "gosha.server:main"
+gosha-telegram = "gosha.telegram:main"
+gosha-operator = "gosha.operator_cli:main"
+gosha-runtime-check = "gosha.runtime_check:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+gosha = ["static/*"]
+
+[tool.setuptools.data-files]
+"share/gosha/migrations/postgres" = ["migrations/postgres/*.sql"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.coverage.run]
+branch = true
+source = ["gosha"]
+
+[tool.coverage.report]
+fail_under = 85
+show_missing = true
+skip_covered = true
+
+[tool.ruff]
+target-version = "py311"
+line-length = 160
+
+[tool.ruff.lint]
+select = ["E9", "F"]

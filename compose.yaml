@@ -1,0 +1,67 @@
+services:
+  postgres:
+    image: postgres:16-alpine@sha256:57c72fd2a128e416c7fcc499958864df5301e940bca0a56f58fddf30ffc07777
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-gosha}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-gosha_local}
+      POSTGRES_DB: ${POSTGRES_DB:-gosha}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  config-check:
+    build: .
+    command: ["gosha-runtime-check", "--require-postgres"]
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-gosha}:${POSTGRES_PASSWORD:-gosha_local}@postgres:5432/${POSTGRES_DB:-gosha}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    read_only: true
+    tmpfs: ["/tmp"]
+    security_opt: ["no-new-privileges:true"]
+    restart: "no"
+
+  bot:
+    profiles: ["live"]
+    build: .
+    command: ["gosha-telegram"]
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-gosha}:${POSTGRES_PASSWORD:-gosha_local}@postgres:5432/${POSTGRES_DB:-gosha}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      GOSHA_PROVIDER: ${GOSHA_PROVIDER:-offline}
+      GOSHA_TELEMETRY_HMAC_KEY: ${GOSHA_TELEMETRY_HMAC_KEY:-}
+      GOSHA_TELEGRAM_OFFSET_FILE: /var/lib/gosha/telegram-offset
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      GOSHA_OPENAI_MODEL: ${GOSHA_OPENAI_MODEL:-}
+    depends_on:
+      config-check:
+        condition: service_completed_successfully
+    volumes:
+      - telegram-state:/var/lib/gosha
+    read_only: true
+    tmpfs: ["/tmp"]
+    security_opt: ["no-new-privileges:true"]
+    healthcheck:
+      test: ["CMD", "gosha-runtime-check", "--require-postgres"]
+      interval: 15s
+      timeout: 5s
+      retries: 4
+    restart: unless-stopped
+
+  debug-web:
+    profiles: ["debug"]
+    build: .
+    ports: ["127.0.0.1:8080:8080"]
+    read_only: true
+    tmpfs: ["/tmp"]
+    security_opt: ["no-new-privileges:true"]
+
+volumes:
+  postgres-data:
+  telegram-state:

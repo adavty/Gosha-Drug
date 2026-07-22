@@ -1,0 +1,222 @@
+{
+  "dataset": "synthetic-challenge.jsonl",
+  "dataset_kind": "synthetic_challenge",
+  "provider": "offline-rules-v1",
+  "reproducibility": {
+    "evaluator_version": "1.4.0",
+    "dataset_sha256": "525f501e7c3de3b345abf306d5446b7d00a065002218bbf64fc00479bb72a046",
+    "python": "3.13.5",
+    "rows": 24,
+    "semantic_seeds": 0
+  },
+  "n": 24,
+  "intent_accuracy": 0.4583,
+  "intent_accuracy_wilson_95": [
+    0.2789,
+    0.6493
+  ],
+  "intent_macro_f1": 0.5467,
+  "slot_value_accuracy": 0.5,
+  "required_slots_case_exact_match": 0.5,
+  "per_class": {
+    "add_deadline": {
+      "support": 4,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0
+    },
+    "call_all_participants": {
+      "support": 1,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0
+    },
+    "correct_deadline": {
+      "support": 3,
+      "precision": 1.0,
+      "recall": 0.3333,
+      "f1": 0.5
+    },
+    "correct_material": {
+      "support": 1,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0
+    },
+    "deactivate_deadline": {
+      "support": 3,
+      "precision": 1.0,
+      "recall": 0.3333,
+      "f1": 0.5
+    },
+    "find_material": {
+      "support": 1,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0
+    },
+    "list_deadlines": {
+      "support": 4,
+      "precision": 1.0,
+      "recall": 0.25,
+      "f1": 0.4
+    },
+    "question_about_deadline": {
+      "support": 0,
+      "precision": 0.0,
+      "recall": 0,
+      "f1": 0
+    },
+    "save_material": {
+      "support": 2,
+      "precision": 1.0,
+      "recall": 0.5,
+      "f1": 0.6667
+    },
+    "unknown": {
+      "support": 5,
+      "precision": 0.2667,
+      "recall": 0.8,
+      "f1": 0.4
+    }
+  },
+  "slice_metrics": {
+    "deadline": {
+      "n": 15,
+      "intent_accuracy": 0.2667
+    },
+    "material": {
+      "n": 4,
+      "intent_accuracy": 0.75
+    },
+    "out_of_scope": {
+      "n": 5,
+      "intent_accuracy": 0.8
+    }
+  },
+  "benchmark_slice_metrics": {},
+  "perturbation_metrics": {},
+  "confusion_matrix": {
+    "add_deadline": {
+      "unknown": 3,
+      "question_about_deadline": 1
+    },
+    "list_deadlines": {
+      "unknown": 3,
+      "list_deadlines": 1
+    },
+    "correct_deadline": {
+      "unknown": 2,
+      "correct_deadline": 1
+    },
+    "deactivate_deadline": {
+      "unknown": 2,
+      "deactivate_deadline": 1
+    },
+    "unknown": {
+      "unknown": 4,
+      "add_deadline": 1
+    },
+    "save_material": {
+      "save_material": 1,
+      "unknown": 1
+    },
+    "call_all_participants": {
+      "call_all_participants": 1
+    },
+    "find_material": {
+      "find_material": 1
+    },
+    "correct_material": {
+      "correct_material": 1
+    }
+  },
+  "error_taxonomy": {
+    "missed_core_intent": 10,
+    "intent_confusion": 1,
+    "unsafe_overclassification": 1,
+    "missed_material_intent": 1
+  },
+  "errors": [
+    {
+      "id": "q01",
+      "gold": "add_deadline",
+      "predicted": "unknown",
+      "taxonomy": "missed_core_intent"
+    },
+    {
+      "id": "q02",
+      "gold": "add_deadline",
+      "predicted": "unknown",
+      "taxonomy": "missed_core_intent"
+    },
+    {
+      "id": "q03",
+      "gold": "add_deadline",
+      "predicted": "unknown",
+      "taxonomy": "missed_core_intent"
+    },
+    {
+      "id": "q04",
+      "gold": "add_deadline",
+      "predicted": "question_about_deadline",
+      "taxonomy": "intent_confusion"
+    },
+    {
+      "id": "q05",
+      "gold": "list_deadlines",
+      "predicted": "unknown",
+      "taxonomy": "missed_core_intent"
+    },
+    {
+      "id": "q06",
+      "gold": "list_deadlines",
+      "predicted": "unknown",
+      "taxonomy": "missed_core_intent"
+    },
+    {
+      "id": "q07",
+      "gold": "list_deadlines",
+      "predicted": "unknown",
+      "taxonomy": "missed_core_intent"
+    },
+    {
+      "id": "q09",
+      "gold": "correct_deadline",
+      "predicted": "unknown",
+      "taxonomy": "missed_core_intent"
+    },
+    {
+      "id": "q10",
+      "gold": "correct_deadline",
+      "predicted": "unknown",
+      "taxonomy": "missed_core_intent"
+    },
+    {
+      "id": "q12",
+      "gold": "deactivate_deadline",
+      "predicted": "unknown",
+      "taxonomy": "missed_core_intent"
+    },
+    {
+      "id": "q13",
+      "gold": "deactivate_deadline",
+      "predicted": "unknown",
+      "taxonomy": "missed_core_intent"
+    },
+    {
+      "id": "q18",
+      "gold": "unknown",
+      "predicted": "add_deadline",
+      "taxonomy": "unsafe_overclassification"
+    },
+    {
+      "id": "q21",
+      "gold": "save_material",
+      "predicted": "unknown",
+      "taxonomy": "missed_material_intent"
+    }
+  ],
+  "llm_usage": null,
+  "claim_limit": "Offline rules smoke test; not an LLM result and not the 300-case Bronze gate."
+}

@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Gosha AI — JMLC Demo</title><link rel="stylesheet" href="styles.css">
+</head>
+<body><main>
+  <header><div class="orb">G</div><div><p class="eyebrow">JMLC · AI PRODUCT</p><h1>Gosha AI</h1><p>Надёжная память дедлайнов внутри учебного чата.</p></div><span class="local">ЛОКАЛЬНОЕ ДЕМО · СИМУЛЯЦИЯ РОЛЕЙ</span></header>
+  <section class="trust"><b>Что здесь настоящее:</b> backend, БД, preview → confirm, аудит и jobs. Это вторичная debug-консоль: Telegram adapter, delivery worker и проверка прав реализованы отдельно, протестированы на mock Bot API и прошли controlled live interaction smoke в одной приватной группе. Это не usability, pilot или проверка плановой доставки.</section>
+  <section class="grid">
+    <article class="chat">
+      <div class="chathead"><div><b>AI Product · учебная группа</b><span id="chat-label">demo-study-group</span></div><div class="context"><select id="chat"><option value="demo-study-group">Основной чат</option><option value="demo-other-group">Другой чат</option></select><select id="actor"><option value="alen">Ален</option><option value="masha">Маша</option><option value="steward">Координатор</option></select><select id="role"><option value="member">Участник</option><option value="steward">Data steward</option><option value="admin">Администратор</option></select></div></div>
+      <div id="feed"><div class="bubble bot">Я реагирую только на явный вызов. До подтверждения состояние не меняется.</div></div>
+      <div class="composer"><input id="text" value="@gosha добавь дедлайн презентация 2026-08-20 18:00"><button id="send">Отправить</button></div>
+      <div class="actions"><button id="retrieve-other">Получить другим участником</button><button id="prepare-correction">Исправить + аудит</button><button id="cross-chat">Проверить изоляцию</button></div>
+    </article>
+    <aside><h2>Backend контролирует последствия</h2><ul><li>AI: только intent + slots</li><li>Preview → явное подтверждение</li><li>IANA timezone и UTC</li><li>Изоляция по chat_id</li><li>Аудит + идемпотентность</li><li>Планирование T−24 + Sunday digest</li></ul><div class="metric"><span>Инвариант записи</span><b>только после confirm</b></div><div class="metric"><span>Массовые действия</span><b>запрещены</b></div><h3>Состояние выбранного чата</h3><pre id="state">загрузка…</pre></aside>
+  </section>
+</main><script src="app.js"></script></body></html>

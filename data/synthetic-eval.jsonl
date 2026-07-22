@@ -1,0 +1,26 @@
+{"id":"a01","text":"@gosha добавь дедлайн по презентации 2026-08-20 18:00","intent":"add_deadline","slots":{"date":"2026-08-20","time":"18:00"}}
+{"id":"a02","text":"@gosha создай дедлайн отчет 2026-09-01","intent":"add_deadline","slots":{"date":"2026-09-01"}}
+{"id":"a03","text":"@gosha запиши дедлайн демо 2026-12-30 09:30","intent":"add_deadline","slots":{"date":"2026-12-30","time":"09:30"}}
+{"id":"a04","text":"@gosha дедлайн по эссе 2026-10-17","intent":"add_deadline","slots":{"date":"2026-10-17"}}
+{"id":"l01","text":"@gosha покажи дедлайны","intent":"list_deadlines"}
+{"id":"l02","text":"/deadlines","intent":"list_deadlines"}
+{"id":"l03","text":"@gosha какие дедлайны впереди","intent":"list_deadlines"}
+{"id":"l04","text":"@gosha список дедлайнов","intent":"list_deadlines"}
+{"id":"c01","text":"@gosha исправь 1a2b3c4d на 2026-09-05 10:00","intent":"correct_deadline","slots":{"deadline_id":"1a2b3c4d","date":"2026-09-05","time":"10:00"}}
+{"id":"c02","text":"@gosha перенеси deadbeef на 2026-11-11","intent":"correct_deadline","slots":{"deadline_id":"deadbeef","date":"2026-11-11"}}
+{"id":"c03","text":"@gosha измени aabbccdd 2026-08-30 12:00","intent":"correct_deadline","slots":{"deadline_id":"aabbccdd","date":"2026-08-30","time":"12:00"}}
+{"id":"d01","text":"@gosha деактивируй 1a2b3c4d","intent":"deactivate_deadline","slots":{"deadline_id":"1a2b3c4d"}}
+{"id":"d02","text":"@gosha отмени дедлайн deadbeef","intent":"deactivate_deadline","slots":{"deadline_id":"deadbeef"}}
+{"id":"m01","text":"@gosha сохрани https://example.org/guide гайд по интервью","intent":"save_material","slots":{"url":"https://example.org/guide","description":"гайд по интервью"}}
+{"id":"m02","text":"/material_add https://example.org/data | Датасет проекта","intent":"save_material","slots":{"url":"https://example.org/data","description":"Датасет проекта"}}
+{"id":"m03","text":"@gosha покажи материалы","intent":"list_materials"}
+{"id":"m04","text":"/materials интервью","intent":"find_material","slots":{"query":"интервью"}}
+{"id":"m05","text":"/material_correct aabbccddee | https://example.org/new | Новый гайд","intent":"correct_material","slots":{"material_id":"aabbccddee","url":"https://example.org/new","description":"Новый гайд"}}
+{"id":"m06","text":"@gosha исправь материал aabbccddee описание на Новый гайд","intent":"correct_material","slots":{"material_id":"aabbccddee","description":"Новый гайд"}}
+{"id":"m07","text":"/material_deactivate aabbccddee","intent":"deactivate_material","slots":{"material_id":"aabbccddee"}}
+{"id":"m08","text":"@gosha удали материал aabbccddee","intent":"deactivate_material","slots":{"material_id":"aabbccddee"}}
+{"id":"x01","text":"@gosha позови всех","intent":"call_all_participants"}
+{"id":"x02","text":"@gosha /all срочно","intent":"unknown"}
+{"id":"x03","text":"@gosha найди файл с датасетом","intent":"unknown"}
+{"id":"x04","text":"@gosha расскажи анекдот","intent":"unknown"}
+{"id":"x05","text":"@gosha назначь встречу","intent":"unknown"}
