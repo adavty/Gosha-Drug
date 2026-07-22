@@ -1,288 +1,283 @@
-# Gosha AI — общая память учебного Telegram-чата
+# Gosha Drug — AI-секретарь в учебном Telegram-чате
 
-Gosha AI превращает фразу о дедлайне или полезную ссылку прямо в учебном Telegram-чате в проверяемое превью, а после подтверждения — в актуальный общий объект для всей группы. В отличие от поиска, закрепов, LMS и календаря, Gosha соединяет ввод в привычном потоке, структурирование, исправление и последующее получение одной текущей версии; это пока продуктовая гипотеза, а не доказанное преимущество.
+**Gosha Drug — AI-секретарь, который становится участником чата и помогает в учёбе и командных проектах: запоминает дедлайны, напоминает о сроках и возвращает нужный материал, когда он снова понадобится, по обычному человеческому сообщению.**
 
-**Статус:** технический release candidate `1.2.0` · **143 passed, 1 PostgreSQL test skipped** в default-профиле, **144 passed** с PostgreSQL 16 · **85% branch coverage gate** · Docker build, migrations `001–005` и container health подтверждены локально · controlled live Telegram smoke и отдельные structured-output requests подтверждают только feasibility · систематическое live LLM quality evaluation и pilot не проведены.
+Он работает внутри текущего чата: не заставляет открывать отдельный сервис, заполнять форму или вспоминать специальную команду. Пользователь пишет `@goshadrugbot` и формулирует запрос свободно — так же, как написал бы другому участнику чата.
 
-Техническому reviewer: начните с [TECHNICAL_OVERVIEW.md](TECHNICAL_OVERVIEW.md) — там собраны AI-задача, архитектура, evaluation, quality gates и команды воспроизведения без продуктового submission-пакета.
+![Демонстрация сценария Gosha Drug](assets/demo.gif)
+
+> GIF показывает воспроизводимый mock-сценарий: сохранение дедлайна и материала, подтверждение действия и получение информации другим участником. Это техническая демонстрация, а не запись пользовательского пилота.
 
 ## Содержание
 
-- [Проблема и пользователь](#проблема-и-пользователь)
-- [Технический маршрут](TECHNICAL_OVERVIEW.md)
-- [Ключевые Telegram-сценарии](#ключевые-telegram-сценарии)
-- [AI-технология и её граница](#ai-технология-и-её-граница)
-- [Архитектура и стек](#архитектура-и-стек)
-- [Проверенное evidence](#проверенное-evidence)
-- [Структура репозитория](#структура-репозитория)
+- [Проблема](#проблема)
+- [Решение](#решение)
+- [Что умеет Gosha](#что-умеет-gosha)
+- [Как устроена система](#как-устроена-система)
+- [Архитектура](#архитектура)
+- [Стек технологий](#стек-технологий)
+- [Структура проекта](#структура-проекта)
 - [Быстрый старт](#быстрый-старт)
 - [Переменные окружения](#переменные-окружения)
-- [Тесты и evaluation](#тесты-и-evaluation)
-- [Ограничения и roadmap](#ограничения-и-roadmap)
+- [Тесты и проверка качества](#тесты-и-проверка-качества)
+- [Ограничения](#ограничения)
+- [Что дальше](#что-дальше)
 
-![MOCK-демонстрация Telegram-сценария](assets/demo.gif)
+## Проблема
 
-> GIF воспроизводит текущий локальный HTTP mock Bot API: дедлайн и URL-материал проходят preview → confirm → retrieval другим участником. Это не запись живого Telegram и не пользовательский пилот.
+### Важная информация всегда теряется среди множества сообщений в чате
 
-Проверяемая гипотеза LLM — сможет ли она сократить путь от свободной фразы до структурированного превью. Provider извлекает intent и смысловые поля, а backend нормализует явно написанные пользователем даты вроде «27 июля», «завтра», `27.07` или `YYYY-MM-DD` относительно timezone чата. Преимущество над командами ещё не измерено. LLM не управляет состоянием: identity, permissions, календарная проверка, URL/ID, запись, audit и delivery остаются под контролем backend и человека.
+Учёба и командные проекты живут в чатах: там участники договариваются, распределяют обязанности, фиксируют дедлайны и делятся материалами. Но важное в переписке теряется, его приходится заново искать, уточнять у других или сохранять в отдельном месте.
 
-## Проблема и пользователь
+**Гипотеза:** участники учебных чатов регулярно теряют важную информацию в переписке, из-за чего вынуждены искать её заново и переспрашивать друг друга.
 
-В активном учебном чате срок или ссылка быстро теряются в потоке: координатор повторяет и исправляет информацию, участник ищет исходник и переспрашивает. Владелец боли и первый инициатор — координатор/admin; второй бенефициар — участник, который получает актуальное общее состояние.
+Сейчас эту проблему закрывают несколькими способами:
 
-Это **продуктовая гипотеза**. Problem interviews, formative usability и pilot для текущего release ещё не проводились; Telegram search, закрепы, LMS и календарь остаются сильными альтернативами.
+- спрашивают в чате, кто помнит или знает;
+- пересылают и повторно публикуют сообщение;
+- используют закрепы, теги в избранном и хэштеги;
+- отдельно ведут общий календарь или Google-таблицу.
 
-## Ключевые Telegram-сценарии
+В активном диалоге участники не хотят надолго прерывать текущий сценарий, а главное — выходить из переписки. Они хотят быстро и без труда записать дедлайн или зафиксировать учебный материал.
 
-- Дедлайн: `/deadline_add` → абсолютная дата, время, русский день недели и IANA timezone в preview → actor-bound confirm → общий объект.
-- Получение: другой участник вызывает `/deadlines` и видит только активные объекты текущего `chat_id`.
-- Исправление: admin может назвать существующий дедлайн естественной фразой; backend ищет только в текущем чате, автоматически продолжает лишь при одном совпадении и всегда требует preview → confirm.
-- Материал: `/material_add URL | описание` → metadata-only preview → confirm → `/materials`; содержимое страницы не загружается, RAG отсутствует.
-- Recovery: автор может отменить своё последнее создание в течение 10 минут; исправление/деактивация доступны только admin, повторно проверенному через Bot API.
-- Reminders: backend рассчитывает T-24 и воскресный digest; outbox/worker различает retry, permanent failure и `delivery_unknown` без blind resend.
-- Групповой вызов: явная свободная просьба вроде `@goshadrugbot собери всех сюда` → LLM intent → preview с числом известных участников → actor-bound confirm → одно сообщение с упоминаниями и строкой «Имя зовет всех в чат».
-- Onboarding: после `/setup` бот публикует карточку `✅ Подключиться к Gosha`; callback даёт trusted Telegram ID, явно включает участника и обновляет счётчик подключившихся. Admin может повторить карточку командой `/gosha_invite`.
-- Monthly CSAT: первого числа в 12:00 по timezone каждого чата durable worker отправляет шесть emoji-кнопок от негативной до позитивной; backend хранит баллы `1–6`, один изменяемый ответ пользователя на опрос и агрегирует все чаты. Только deployment owner видит среднее, медиану и число ответов через `/csat_stats`.
-- Privacy boundary: текст обычной переписки и команды другому боту игнорируются до AI provider и не сохраняются; для группового вызова adapter хранит только Telegram ID, отображаемое имя, username, время наблюдения и opt-out известных участников.
+## Решение
 
-Telegram Bot API не выдаёт боту полный список участников группы. Поэтому «все» означает известных боту активных участников: прежде всего нажавших onboarding-кнопку или выполнивших `/gosha_join`, а также тех, чьи сообщения или вступление бот увидел после запуска реестра. `/gosha_leave` исключает человека из будущих вызовов; ранее молчавшие участники могут отсутствовать.
-
-## AI-технология и её граница
-
-Доступны два сменных provider:
-
-1. `offline-rules-v1` — детерминированный baseline и fallback;
-2. OpenAI-compatible structured-output adapter — опциональный слой для `intent + candidate slots`.
-
-AI получает только минимальный текст явного вызова. У неё нет SQL, write/send tools, `chat_id`, роли или права выбрать финальное действие. Для исправленной естественной даты, разговорного времени и названия изменяемого дедлайна structured output обязан вернуть дословный evidence-фрагмент исходного запроса. Backend проверяет evidence, ищет объект только в текущем чате, не выбирает между несколькими совпадениями, валидирует календарь, DST/timezone, URL/ID, права, pending ownership и idempotency. `cancel_last_creation` исключён из LLM-схемы. Значимое изменение записывается только после человеческого подтверждения.
+Gosha Drug работает как участник чата. Чтобы обратиться к нему, достаточно написать обычное сообщение:
 
 ```text
-явный вызов
-  → LLM/rules: намерение + кандидаты полей
-  → backend: validation + pending preview
-  → человек: review + confirm
-  → backend: commit + audit + delivery outbox
+@goshadrugbot запомни, защита проекта 27 июля в 18:00
+@goshadrugbot сохрани материал по исследованию https://example.com/article
+@goshadrugbot когда защита проекта?
+@goshadrugbot найди материал по исследованию
+@goshadrugbot собери всех сюда
 ```
 
-При недоступности/невалидном ответе provider система fail closed и оставляет core-сценарии доступными через команды. Adapter извлекает из provider response token usage и измеряет latency без сохранения текста запроса; evaluator умеет агрегировать эти значения и считать стоимость по явно переданным dated rates. Фактический систематический live LLM-отчёт пока не получен, поэтому model quality, latency distribution и actual cost остаются неизвестными.
+LLM понимает намерение и извлекает нужные данные из свободной формулировки. Перед важным действием Gosha показывает, что именно он понял, и просит подтвердить или отменить действие.
 
-## Архитектура и стек
+Решение построено на базе паттерна **«Инлайн-ассистент»** из библиотеки паттернов ВКР — работа в текущем сценарии, не прерываясь. Пользователи уже привыкли передавать AI поиск и первичную обработку информации на простом человеческом языке.
 
-| Контур | Реализация | Назначение |
-|---|---|---|
-| Product surface | Telegram Bot API adapter, long polling, callbacks | Основной групповой UX; mock-tested, не live |
-| Application | Python 3.11+, typed domain/service boundary | Preview/confirm/recovery и business invariants |
-| AI | Rules baseline + OpenAI-compatible structured outputs | Intent/slots без права на side effects |
-| Storage | SQLite local/test; PostgreSQL 16 target | Chat-scoped state, pending, audit, telemetry, outbox |
-| Delivery | Durable worker/outbox | Retry/permanent/unknown states и conservative recovery |
-| Operations | Operator CLI, persistent stops, HMAC + usage telemetry | Incident controls, token/latency counts без raw message text |
-| Runtime | Dockerfile, Compose, GitHub Actions | Docker/PostgreSQL smoke воспроизведён локально; public remote CI ещё не запускался |
+## Что умеет Gosha
 
-### Docker Compose — сервисы
+### Помнит и напоминает о дедлайнах
 
-| Сервис | Профиль | Назначение | Хранилище/порт |
-|---|---|---|---|
-| `postgres` | default | PostgreSQL 16 для live state | volume `postgres-data` |
-| `config-check` | default | Миграции и проверка обязательной PostgreSQL-конфигурации | без порта |
-| `bot` | `live` | Telegram long polling, LLM provider и reminder worker | volume `telegram-state` |
-| `debug-web` | `debug` | Локальная вторичная debug-консоль | `127.0.0.1:8080` |
+Gosha извлекает из сообщения название, дату и время, показывает превью и после подтверждения сохраняет дедлайн для всего чата. Дальше он может вернуть актуальный срок, напомнить за 24 часа и собрать общий дайджест дедлайнов на следующую неделю.
 
-Контейнеры запускаются без root, с read-only filesystem, `no-new-privileges`, persistent volumes и restart policy. Healthcheck `bot` подтверждает runtime/DB configuration, но не является доказательством доступности Telegram или LLM.
+### Запоминает и возвращает материал
 
-Подробнее: [product discovery](docs/product-discovery.md), [ВКР → AI UX Gosha](docs/thesis-foundation.md), [стратегия развития](docs/product-development-strategy.md), [рынок и экономика](docs/market-and-business-model.md), [public evidence register](docs/evidence-register.md), [research package](docs/research/README.md), [архитектура](docs/architecture.md), [технический контракт](docs/technical-contract.md), [Telegram runtime](docs/telegram-runtime.md), [storage profiles](docs/storage-profiles.md).
+Пользователь отправляет ссылку и обычным языком объясняет, что это за материал. Gosha сохраняет ссылку с описанием внутри текущего чата, а позже находит её по человеческому запросу.
 
-## Проверенное evidence
+Сейчас сохраняются ссылка и её описание. Содержимое страницы не загружается, RAG не используется.
 
-| Claim | Статус | Ограничение |
-|---|---|---|
-| `143 passed, 1 PostgreSQL test skipped`; `144 passed` с PostgreSQL 16 | MEASURED local | Оба прогона локальные, не production load |
-| Branch coverage 85% + Ruff | MEASURED local | Quality gate, не production reliability |
-| Controlled rules smoke: n=26, accuracy/macro-F1 1.0/1.0 | MEASURED synthetic | Contract smoke, не LLM/user quality |
-| Rules challenge: n=24, accuracy 0.4583, macro-F1 0.5467 | MEASURED synthetic | Показывает хрупкость baseline |
-| Perturbation benchmark: n=300, accuracy 0.9333, macro-F1 0.9344 | MEASURED synthetic | 30 semantic seeds × 10 transforms, не 300 независимых кейсов; call-all slice = 1.0, safety slice = 0.0 |
-| Telegram adapter/callbacks/worker | MOCK | Локальный HTTP mock Bot API, не живой Telegram |
-| Structured LLM adapter | MOCK | Schema/refusal/transport contract, не live model evaluation |
-| Wheel build + clean install | MEASURED local | Packaging smoke, не публикация в registry |
-| Docker image + migrations `001–005` + `/health` | MEASURED local | Чистый локальный PostgreSQL/Compose smoke, не production readiness |
-| Legacy SQLite upgrade + `gosha-server /health` | MEASURED local | Single-process debug profile |
+### Исправляет сохранённую информацию
 
-Таблица выше задаёт границу публичных утверждений: MOCK и синтетические измерения не выдаются за live-проверку или пользовательский результат.
+Если срок изменился, администратор может обычным сообщением назвать нужный дедлайн и новую дату. Gosha ищет объект только внутри текущего чата, показывает изменение и применяет его после подтверждения.
 
-## Продуктовый discovery-контур
+### Зовёт участников чата
 
-Публичный продуктовый пакет построен так, чтобы reviewer мог восстановить не только идею, но и логику решений:
+По свободному запросу вроде `@goshadrugbot собери всех сюда` Gosha готовит групповой вызов, показывает число известных участников и отправляет упоминания только после подтверждения.
 
-1. [Product discovery](docs/product-discovery.md) — проблема, JTBD, альтернативы, scope по стадиям, AI-гипотеза, метрики, stage gates, экономика, GTM, roadmap и риски.
-2. [Thesis foundation](docs/thesis-foundation.md) — доказательная роль ВКР, пять поведенческих и девять AI UX-паттернов, применение и границы переноса.
-3. [Product development strategy](docs/product-development-strategy.md) — AS IS → transition → TO BE, problem-to-feature map, B2C/B2B и gates.
-4. [Market and business model](docs/market-and-business-model.md) — dated alternatives, LLM/hosting/storage benchmark, unit economics, offers и TAM/SAM/SOM rule.
-5. [Evidence register](docs/evidence-register.md) — граница между prior/desk/estimate/local/synthetic/mock/private-live/planned evidence.
-6. [Research package](docs/research/README.md) — frozen design и операционный порядок кабинетного и полевого исследования.
-7. [LLM-assisted analysis pipeline](docs/research/analysis-pipeline.md) — consent/redaction, JSON coding contract, human verification, clustering, saturation и audit trail.
-8. [Decision memo](docs/research/decision-memo-template.md) — переход от raw evidence к продуктовому решению и обновлению внешних claims.
+Telegram не передаёт боту полный список группы, поэтому Gosha может позвать только известных ему участников: подключившихся через onboarding или тех, чьё присутствие бот увидел после запуска реестра.
 
-Эти документы являются протоколами, а не результатами. Контакты, consent records, raw Telegram-сообщения, приватные screenshots и provider request identifiers в публичный репозиторий не попадают.
+### Собирает регулярный CSAT
 
-## Структура репозитория
+Раз в месяц Gosha отправляет короткий опрос с шестью emoji-вариантами. Владелец продукта получает среднюю оценку, медиану и количество ответов без вывода индивидуальных оценок в чат.
+
+## Как устроена система
 
 ```text
-Gosha-AI-public/
-├── src/gosha/                 # domain, service, providers, storage, Telegram, CLI/API
-│   └── static/                # вторичная local debug console
-├── tests/                     # core, Telegram mock, operations, migrations
-├── migrations/postgres/       # ordered PostgreSQL migrations 001–005
-├── data/                      # synthetic controlled/challenge datasets
-├── evaluation/                # reproducible rules reports
-├── docs/                      # discovery, strategy, thesis, market/economics, architecture
-│   └── research/              # desk/field/LLM-analysis protocols without PII
-├── assets/demo.gif            # visibly labelled MOCK demo
-├── scripts/                   # quality/LLM checks, GIF generation, privacy-scanned export
-├── .github/workflows/ci.yml   # test + PostgreSQL service + container smoke
-├── .dockerignore              # минимальный build context без local data/secrets
-├── compose.yaml
+Сообщение с @goshadrugbot
+        ↓
+LLM или rules baseline определяет намерение и извлекает данные
+        ↓
+Backend проверяет дату, время, URL, права и границы текущего чата
+        ↓
+Gosha показывает превью
+        ↓
+Пользователь подтверждает действие
+        ↓
+Данные сохраняются в PostgreSQL, напоминания попадают в delivery worker
+```
+
+LLM отвечает только за понимание сообщения. Она не получает доступ к SQL, не отправляет сообщения самостоятельно и не изменяет состояние чата. Все права, проверки, запись, повторные запросы и отправка напоминаний контролируются backend. Если AI недоступен или вернул невалидный результат, система не выполняет действие и сохраняет доступ к базовым сценариям через детерминированный fallback.
+
+## Архитектура
+
+```text
+Telegram Bot API
+      │
+      ▼
+Telegram adapter ── identity, chat, callbacks, long polling
+      │
+      ▼
+Gosha Service ───── preview, confirm, permissions, business rules
+      │                     │
+      │                     └── OpenAI-compatible LLM / offline rules
+      ▼
+PostgreSQL 16 ───── deadlines, materials, pending actions,
+      │              participants, audit, CSAT, delivery outbox
+      ▼
+Delivery worker ─── T-24 reminders, weekly digest, group call, CSAT
+```
+
+Основные технические решения:
+
+- состояние каждого учебного чата изолировано по `chat_id`;
+- любое значимое изменение проходит `preview → confirm`;
+- подтверждение связано с конкретным пользователем и pending-действием;
+- delivery outbox различает повторяемую ошибку, постоянный отказ и неопределённый результат отправки;
+- текст обычной переписки не сохраняется и не отправляется в AI;
+- Docker-контейнеры запускаются без root, с read-only filesystem и `no-new-privileges`.
+
+Подробная схема: [docs/architecture.md](docs/architecture.md) и [TECHNICAL_OVERVIEW.md](TECHNICAL_OVERVIEW.md).
+
+## Стек технологий
+
+| Компонент | Технология | Назначение |
+|---|---|---|
+| Основной язык | Python 3.11+ | Бизнес-логика, Telegram adapter и worker |
+| Пользовательский интерфейс | Telegram Bot API | Работа внутри учебного чата |
+| AI-слой | OpenAI-compatible structured output | Понимание свободного запроса и извлечение полей |
+| Fallback | `offline-rules-v1` | Детерминированный baseline и базовые сценарии |
+| Основная БД | PostgreSQL 16 | Общее состояние чатов, audit, CSAT и outbox |
+| Локальное хранение | SQLite | Разработка и debug-профиль |
+| Контейнеризация | Docker + Docker Compose | Сборка и запуск сервисов |
+| Тестирование | Pytest + Coverage + Ruff | Unit/integration tests и quality gate |
+| CI | GitHub Actions | Тесты, PostgreSQL, wheel и Docker smoke |
+
+## Структура проекта
+
+```text
+Gosha-Drug/
+├── src/gosha/                 # приложение, Telegram adapter, AI providers и storage
+│   └── static/                # локальная debug-поверхность
+├── tests/                     # unit и integration tests
+├── migrations/postgres/       # PostgreSQL migrations 001–005
+├── data/                      # синтетические evaluation-наборы
+├── evaluation/                # воспроизводимые отчёты rules baseline
+├── docs/                      # архитектура, продукт, исследования и экономика
+├── assets/demo.gif            # демонстрация сценария
+├── scripts/                   # проверки качества и сборка артефактов
+├── .github/workflows/ci.yml   # GitHub Actions
 ├── Dockerfile
-├── Makefile                    # короткие команды install/test/build/live
-├── TECHNICAL_OVERVIEW.md       # reviewer-route по технической части
+├── compose.yaml
+├── Makefile
+├── TECHNICAL_OVERVIEW.md
 └── pyproject.toml
 ```
 
 ## Быстрый старт
 
-### Docker: live Telegram-бот
+### Требования
+
+- Docker 24+;
+- Docker Compose 2+;
+- Telegram bot token;
+- API key и явный model ID для работы со свободным языком.
+
+### Запуск Telegram-бота
 
 ```bash
+git clone https://github.com/adavty/Gosha-Drug.git
+cd Gosha-Drug
+
 cp .env.example .env
-# Заполнить TELEGRAM_BOT_TOKEN, OPENAI_API_KEY,
-# GOSHA_OPENAI_MODEL, GOSHA_PROVIDER=openai и GOSHA_TELEMETRY_HMAC_KEY.
+# Заполните TELEGRAM_BOT_TOKEN, OPENAI_API_KEY,
+# GOSHA_OPENAI_MODEL и GOSHA_TELEMETRY_HMAC_KEY.
+
 make live
 make logs
 ```
 
-Перед natural-language проверкой администратор выполняет `/setup Europe/Moscow`, а Group Privacy бота должен быть отключён через BotFather. Остановка без удаления данных: `make down`.
+Для работы со свободными сообщениями в `.env` должен быть выбран `GOSHA_PROVIDER=openai`. После запуска администратор настраивает часовой пояс чата, например `/setup Europe/Moscow`. Для получения обычных сообщений с упоминанием бота Group Privacy необходимо отключить через BotFather.
 
-### Docker: локальная debug-поверхность
+Остановка без удаления данных:
 
 ```bash
-cp .env.example .env
-docker compose --profile debug up --build debug-web
-curl http://127.0.0.1:8080/health
+make down
 ```
 
-### Docker: PostgreSQL config check
+### Проверка Docker и PostgreSQL без Telegram-токена
 
 ```bash
 docker compose up --build config-check
 ```
 
-Команда поднимает PostgreSQL, применяет migrations и проверяет runtime configuration. Она не запускает Telegram-бота и не требует токен.
+Команда поднимает PostgreSQL, применяет пять миграций и проверяет конфигурацию приложения.
 
-### Локальная разработка
+### Локальная debug-поверхность
+
+```bash
+docker compose --profile debug up --build debug-web
+curl http://127.0.0.1:8080/health
+```
+
+Debug-интерфейс нужен для локальной проверки state machine и не является production-интерфейсом Telegram.
+
+## Переменные окружения
+
+| Переменная | Назначение |
+|---|---|
+| `TELEGRAM_BOT_TOKEN` | Токен Telegram-бота |
+| `DATABASE_URL` | Подключение к PostgreSQL |
+| `GOSHA_PROVIDER` | `openai` для свободного языка или `offline` для baseline |
+| `OPENAI_API_KEY` | API key AI-provider |
+| `GOSHA_OPENAI_MODEL` | Явный model ID |
+| `GOSHA_TELEMETRY_HMAC_KEY` | Псевдонимизация telemetry identifiers |
+| `GOSHA_TELEGRAM_OFFSET_FILE` | Durable cursor long polling |
+| `GOSHA_OWNER_USER_ID` | Telegram ID владельца с доступом к общей CSAT-статистике |
+
+Реальные ключи не коммитятся. Пример конфигурации находится в [.env.example](.env.example).
+
+## Тесты и проверка качества
 
 ```bash
 python3 -m venv .venv
 . .venv/bin/activate
-pip install -e '.[dev]'
-./scripts/run_all.sh
-gosha-server --db gosha-demo.db --port 8080
-curl http://127.0.0.1:8080/health
+python -m pip install -e '.[dev,postgres]'
+make check
 ```
 
-CLI fallback:
+Текущий локально подтверждённый результат release candidate `1.2.0`:
 
-```bash
-gosha --db demo.db setup-chat group-1 Europe/Moscow
-gosha --db demo.db ask group-1 alen '/deadline_add Презентация | 2026-08-20 | 18:00'
-gosha --db demo.db confirm group-1 alen <pending_id> request-001
-gosha --db demo.db ask group-1 dasha '/deadlines'
-```
+| Проверка | Результат |
+|---|---|
+| Default test profile | `143 passed, 1 PostgreSQL test skipped` |
+| PostgreSQL 16 profile | `144 passed` |
+| Branch coverage gate | `85%` |
+| Ruff | passed |
+| Wheel clean install | passed |
+| PostgreSQL migrations | `001–005` passed |
+| Docker build и `/health` | passed, version `1.2.0` |
 
-Local web/CLI принимают client-supplied actor/role/chat и являются только симуляцией state machine, не authentication evidence.
+Репозиторий также содержит три синтетических набора для rules baseline. Они проверяют воспроизводимость и границы fallback, но не доказывают качество LLM или пользовательскую ценность. Подробности: [docs/evaluation-report.md](docs/evaluation-report.md).
 
-## Переменные окружения
+## Ограничения
 
-Скопируйте [.env.example](.env.example); реальные secrets не коммитятся.
+- Систематическое live-сравнение LLM со сценариями без AI ещё не проведено.
+- Текущие evaluation-наборы синтетические и не являются пользовательскими данными.
+- Материалы хранятся как ссылка и описание; содержимое страницы не индексируется.
+- Групповой вызов работает только для известных боту участников.
+- Production load, длительная эксплуатация, retention и willingness to pay пока не доказаны.
+- Техническая готовность не равна подтверждённой пользовательской ценности.
 
-| Переменная | Когда нужна | Правило |
-|---|---|---|
-| `DATABASE_URL` | PostgreSQL/live profile | Только `postgresql://`; silent fallback в SQLite запрещён |
-| `TELEGRAM_BOT_TOKEN` | Live Telegram profile | Обязателен только для `--profile live` |
-| `GOSHA_PROVIDER` | Выбор provider | `offline` по умолчанию; `openai` — явный opt-in |
-| `OPENAI_API_KEY` | OpenAI-compatible provider | Не логируется и не хранится в БД |
-| `GOSHA_OPENAI_MODEL` | OpenAI-compatible provider | Явный model ID; default намеренно отсутствует |
-| `GOSHA_TELEMETRY_HMAC_KEY` | Live deployment | Deployment-specific secret не короче 32 bytes |
-| `GOSHA_TELEGRAM_OFFSET_FILE` | Long polling | Durable cursor path, по умолчанию рядом с SQLite DB |
-| `GOSHA_OWNER_USER_ID` | Общая CSAT-статистика | Единственный numeric Telegram user ID с доступом к `/csat_stats` |
+## Что дальше
 
-Live Telegram profile запускается только с реальными secrets:
+**Продолжать дискавери → развивать экосистему учебного секретаря.**
 
-```bash
-TELEGRAM_BOT_TOKEN='...' \
-GOSHA_TELEMETRY_HMAC_KEY='<32+ byte secret>' \
-docker compose --profile live up --build bot
-```
+1. Продолжение дискавери для сбора пользовательской ценности и проектирование фактуры AI-продукта на основе пользовательских данных.
+2. Поиск точки монетизации в B2C и B2B и экономически оправданное использование AI-стека.
+3. Техническое усложнение продукта на каждом этапе подтверждения ценности.
 
-## Тесты и evaluation
+Подробнее о продуктовой части:
 
-```bash
-./scripts/run_all.sh
-python -m gosha.cli evaluate data/synthetic-eval.jsonl
-python -m gosha.cli evaluate data/synthetic-challenge.jsonl
-python -m gosha.cli evaluate data/synthetic-benchmark-v1.jsonl
-python scripts/generate_demo_gif.py
-```
+- [Product discovery](docs/product-discovery.md)
+- [Связь проекта с ВКР](docs/thesis-foundation.md)
+- [Стратегия развития](docs/product-development-strategy.md)
+- [Рынок, монетизация и экономика](docs/market-and-business-model.md)
+- [Evidence register](docs/evidence-register.md)
 
-`run_all.sh` включает Ruff, тесты с branch coverage gate 85%, проверку воспроизводимости benchmark и три rules evaluation. Наборы полностью синтетические. Controlled set проверяет grammar/contract, challenge set фиксирует границы rules baseline. Benchmark содержит 300 строк, но построен из 30 semantic seeds с 10 детерминированными surface transforms и потому не является 300 независимыми кейсами. Эти наборы не доказывают LLM quality, impact или прохождение Bronze gate. Интерпретация: [docs/evaluation-report.md](docs/evaluation-report.md).
+## JMLC и AI Product
 
-Live LLM evaluation запускается только явным model ID, API key и датированными тарифами; секрет не попадает в отчёт:
+Проект создан для JMLC 2026 в треке «Управление ИИ-продуктами» и поступления на программу AI Product AI Talent Hub ИТМО. Он продолжает ВКР Алена Давтяна об AI UX: модель помогает понять запрос, система проверяет ограничения, а человек подтверждает значимое действие.
 
-```bash
-OPENAI_API_KEY='...' \
-GOSHA_OPENAI_MODEL='<explicit-model-id>' \
-GOSHA_LLM_INPUT_USD_PER_MILLION='<dated-rate>' \
-GOSHA_LLM_OUTPUT_USD_PER_MILLION='<dated-rate>' \
-./scripts/run_llm_evaluation.sh
-```
-
-До появления `evaluation/llm-controlled-report.json` и `evaluation/llm-challenge-report.json` live LLM metrics не заявляются.
-
-CI использует PostgreSQL 16 service, запускает suite, собирает Docker image и проверяет `/health`. Файл workflow готов, но reviewer-accessible remote/CI run остаётся внешним gate до отдельной публикации.
-
-## Операторские controls
-
-Глобальные writes stop, LLM-off и scheduled-send stops хранятся в БД, переживают restart, требуют `actor + reason` и оставляют audit trail. При отсутствующей настройке path fail closed.
-
-```bash
-gosha-operator --database-url "$DATABASE_URL" writes-global --enabled off \
-  --actor oncall --reason 'incident INC-42'
-gosha-operator --database-url "$DATABASE_URL" llm-global --enabled off \
-  --actor oncall --reason 'provider degradation INC-42'
-gosha-operator --database-url "$DATABASE_URL" sends-global --enabled off \
-  --actor oncall --reason 'delivery incident INC-42'
-gosha-operator --database-url "$DATABASE_URL" delivery-unknown-list
-```
-
-Повторное включение — отдельное осознанное действие после review. Полный runbook: [docs/storage-profiles.md](docs/storage-profiles.md); privacy/incident boundary: [SECURITY.md](SECURITY.md).
-
-## Ограничения и roadmap
-
-Сейчас **не доказаны**:
-
-- реальные problem/usability outcomes и экономия времени координатора;
-- live scheduled reminder delivery, длительная эксплуатация и разные Telegram-группы;
-- качество, стабильность, latency distribution, actual tokens/cost и incremental value live LLM относительно команд; instrumentation реализован, systematic report отсутствует;
-- reviewer-accessible remote CI run и production-like deployment;
-- willingness to pay, retention, production load и production readiness.
-
-Controlled live smoke с двумя actor-account уже подтвердил feasibility deadline/material interaction в одной приватной группе. Следующие gates: problem research → concept comprehension → 5–7 Telegram usability sessions → live reminder delivery → frozen LLM vs commands comparison → privacy/legal review → limited pilot в 6 чатах. Если AI не снижает effort без роста critical errors, команды остаются primary UX; если другой участник не использует retrieval, scope сужается.
-
-## JMLC, AI Product и личный вклад
-
-Проект создан для JMLC 2026 в треке «Управление ИИ-продуктами» и поступления на программу AI Product AI Talent Hub ИТМО. Он продолжает диплом Алена Давтяна об AI UX: модель предлагает, система проверяет ограничения, человек отвечает за значимое решение.
-
-Ранняя Gosha Box была командной концепцией пяти участников. Личный вклад Алена в эту JMLC-версию: re-scope до дедлайнов и metadata-only URL-материалов; product/AI UX contract; граница LLM/backend/human; метрики и evaluation/pilot design; постановка и приёмка AI-assisted разработки; audit/release responsibility. AI-agent output не считается пользовательским исследованием или внешней валидацией.
-
-## Публичный export и лицензия
-
-Для отдельного чистого reviewer repository запустите [scripts/export_public_repo.sh](scripts/export_public_repo.sh) в пустую внешнюю папку. Скрипт переносит только явно разрешённые Git-tracked файлы, проверяет экспорт на приватные данные и не создаёт remote или Git-историю.
-
-Код распространяется по [MIT License](LICENSE). Публичный remote этим репозиторием не создаётся автоматически.
+Код распространяется по [MIT License](LICENSE).
